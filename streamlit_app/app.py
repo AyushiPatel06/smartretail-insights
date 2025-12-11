@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+import subprocess
+import sys
 
-st.title("📊 SmartRetail Insights — Daily Revenue (Kaggle)")
+
+st.title("SmartRetail Insights — Daily Revenue (Kaggle)")
 
 # ---------- 1. PATHS ----------
 APP_DIR = Path(__file__).resolve().parent
@@ -35,7 +38,40 @@ df_raw["InvoiceDate_date"] = df_raw["InvoiceDate"].dt.date
 df_raw["line_total"] = df_raw["Quantity"] * df_raw["Price"]
 
 # ---------- 3. SIDEBAR FILTERS ----------
-st.sidebar.header("🔍 Filters")
+# ---------- SIDEBAR: REFRESH DATA ----------
+st.sidebar.subheader("⚙️ Data Controls")
+
+if st.sidebar.button(" Refresh data from raw file"):
+    with st.spinner("Refreshing data... this may take a few seconds"):
+        # Paths to your scripts
+        conv_script = PROJECT_ROOT / "src" / "convert_online_retail.py"
+        rfm_script = PROJECT_ROOT / "src" / "rfm_segmentation.py"
+
+        # Run the ETL script
+        r1 = subprocess.run(
+            [sys.executable, str(conv_script)],
+            capture_output=True,
+            text=True,
+        )
+        # Run the RFM script
+        r2 = subprocess.run(
+            [sys.executable, str(rfm_script)],
+            capture_output=True,
+            text=True,
+        )
+
+        if r1.returncode != 0 or r2.returncode != 0:
+            st.error("There was an error while refreshing data.")
+            st.write("ETL stderr:")
+            st.code(r1.stderr)
+            st.write("RFM stderr:")
+            st.code(r2.stderr)
+        else:
+            st.success(" Data refreshed successfully! Reloading dashboard...")
+            st.rerun()
+
+
+st.sidebar.header("Filters")
 
 min_d = df_daily_all["d"].min()
 max_d = df_daily_all["d"].max()
@@ -81,21 +117,21 @@ else:
     peak_day = None
 
 c1, c2, c3 = st.columns(3)
-c1.metric("💰 Total Revenue", f"${total_rev:,.0f}")
-c2.metric("📅 Avg Daily Revenue", f"${avg_rev:,.0f}" if avg_rev else "N/A")
-c3.metric("🚀 Peak Day", str(peak_day) if peak_day else "N/A")
+c1.metric("Total Revenue", f"${total_rev:,.0f}")
+c2.metric("Avg Daily Revenue", f"${avg_rev:,.0f}" if avg_rev else "N/A")
+c3.metric("Peak Day", str(peak_day) if peak_day else "N/A")
 
 # ---------- 6. TREND CHART ----------
 if not df_daily_f.empty:
     df_daily_f["7d_avg"] = df_daily_f["revenue"].rolling(7).mean()
-    st.subheader("📈 Daily Revenue Trend")
+    st.subheader("Daily Revenue Trend")
     st.line_chart(df_daily_f.set_index("d")[["revenue", "7d_avg"]])
 else:
-    st.subheader("📈 Daily Revenue Trend")
+    st.subheader("Daily Revenue Trend")
     st.info("No data for the selected filters.")
 
 # ---------- 7. TOP COUNTRIES ----------
-st.subheader("🌍 Top 5 Countries by Total Revenue")
+st.subheader("Top 5 Countries by Total Revenue")
 
 if not df_raw_f.empty:
     # If All countries, show top 5; if single country, show just that one
