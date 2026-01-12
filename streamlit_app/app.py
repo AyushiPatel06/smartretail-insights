@@ -3,6 +3,9 @@ import pandas as pd
 from pathlib import Path
 import subprocess
 import sys
+import time
+from streamlit_autorefresh import st_autorefresh
+
 
 
 st.title("SmartRetail Insights — Daily Revenue (Kaggle)")
@@ -12,10 +15,18 @@ APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
 DAILY_PATH = PROJECT_ROOT / "data" / "processed" / "daily_revenue.parquet"
 RAW_EXCEL  = PROJECT_ROOT / "data" / "raw" / "online_retail_II.xlsx"
+LIVE_PATH = PROJECT_ROOT / "data" / "processed" / "live_transactions.parquet"
+
 
 # ---------- 2. LOAD DATA ----------
 # Pre-aggregated daily data (for date defaults)
 df_daily_all = pd.read_parquet(DAILY_PATH).sort_values("d")
+
+
+# 🔧 FIX: standardize column name
+df_daily_all = df_daily_all.rename(columns={"line_total": "revenue"})
+
+
 # Ensure d is a date
 df_daily_all["d"] = pd.to_datetime(df_daily_all["d"]).dt.date
 
@@ -29,6 +40,12 @@ df_raw = pd.concat(
     ignore_index=True,
 )
 
+# ✅ Append simulated live transactions (today's data)
+if LIVE_PATH.exists():
+    df_live = pd.read_parquet(LIVE_PATH)
+    df_raw = pd.concat([df_raw, df_live], ignore_index=True)
+
+
 # Basic clean on raw
 df_raw = df_raw.dropna(subset=["InvoiceDate", "Quantity", "Price", "Country"])
 df_raw = df_raw[(df_raw["Quantity"] > 0) & (df_raw["Price"] > 0)].copy()
@@ -40,6 +57,45 @@ df_raw["line_total"] = df_raw["Quantity"] * df_raw["Price"]
 # ---------- 3. SIDEBAR FILTERS ----------
 # ---------- SIDEBAR: REFRESH DATA ----------
 st.sidebar.subheader("⚙️ Data Controls")
+
+auto_on = st.sidebar.checkbox("Auto-refresh", value=True)
+refresh_sec = st.sidebar.slider("Refresh interval (seconds)", 5, 60, 10)
+
+auto_gen = st.sidebar.checkbox("Auto-generate live data", value=False)
+gen_every = st.sidebar.slider("Generate every (seconds)", 10, 120, 30)
+
+# Start the auto-refresh loop (re-runs the app)
+if auto_on:
+    st_autorefresh(interval=refresh_sec * 1000, key="auto_refresh")
+
+# --- Safe throttling: only generate once per gen_every seconds ---
+if "last_gen_ts" not in st.session_state:
+    st.session_state.last_gen_ts = 0.0
+
+def run_pipeline():
+    sim_script = PROJECT_ROOT / "src" / "simulate_transactions.py"
+    conv_script = PROJECT_ROOT / "src" / "convert_online_retail.py"
+    rfm_script = PROJECT_ROOT / "src" / "rfm_segmentation.py"
+
+    r_sim = subprocess.run([sys.executable, str(sim_script)], capture_output=True, text=True)
+    r_conv = subprocess.run([sys.executable, str(conv_script)], capture_output=True, text=True)
+    r_rfm = subprocess.run([sys.executable, str(rfm_script)], capture_output=True, text=True)
+
+    return r_sim, r_conv, r_rfm
+
+# Auto-generate (only when enabled + enough time has passed)
+now = time.time()
+if auto_on and auto_gen and (now - st.session_state.last_gen_ts) >= gen_every:
+    st.session_state.last_gen_ts = now
+    with st.spinner("Auto-generating live data + rebuilding metrics..."):
+        r_sim, r_conv, r_rfm = run_pipeline()
+
+    if r_sim.returncode != 0 or r_conv.returncode != 0 or r_rfm.returncode != 0:
+        st.error("❌ Auto-generate failed. Showing errors below.")
+        st.write("Simulate stderr:"); st.code(r_sim.stderr)
+        st.write("Convert stderr:"); st.code(r_conv.stderr)
+        st.write("RFM stderr:"); st.code(r_rfm.stderr)
+
 
 if st.sidebar.button(" Refresh data from raw file"):
     with st.spinner("Refreshing data... this may take a few seconds"):
@@ -72,16 +128,33 @@ if st.sidebar.button(" Refresh data from raw file"):
 
 
 st.sidebar.header("Filters")
+view_mode = st.sidebar.radio(
+    "View",
+    ["Recent (recommended)", "Full history"],
+    index=0
+)
 
 min_d = df_daily_all["d"].min()
 max_d = df_daily_all["d"].max()
 
-start_date, end_date = st.sidebar.date_input(
-    "Date range",
-    value=(min_d, max_d),
+start_date = st.sidebar.date_input(
+    "Start date",
+    value=min_d,
     min_value=min_d,
     max_value=max_d,
 )
+
+end_date = st.sidebar.date_input(
+    "End date",
+    value=max_d,
+    min_value=min_d,
+    max_value=max_d,
+)
+
+# Safety: if user picks end before start, swap them
+if end_date < start_date:
+    start_date, end_date = end_date, start_date
+
 
 countries = ["All"] + sorted(df_raw["Country"].unique().tolist())
 country_selected = st.sidebar.selectbox("Country", countries)
@@ -94,18 +167,21 @@ if country_selected != "All":
 
 df_raw_f = df_raw.loc[mask].copy()
 
-# Rebuild daily revenue from filtered raw data
-if not df_raw_f.empty:
-    df_daily_f = (
-        df_raw_f
-        .groupby("InvoiceDate_date")["line_total"]
-        .sum()
-        .reset_index()
-        .rename(columns={"InvoiceDate_date": "d", "line_total": "revenue"})
-        .sort_values("d")
-    )
-else:
-    df_daily_f = pd.DataFrame(columns=["d", "revenue"])
+# ✅ Trend data comes from parquet (includes 2025 live day)
+df_daily_f = df_daily_all[
+    (df_daily_all["d"] >= start_date) & (df_daily_all["d"] <= end_date)
+].copy()
+
+# ✅ Make it look like a real-time dashboard (avoid long empty gaps)
+if view_mode == "Recent (recommended)" and not df_daily_f.empty:
+    df_daily_f["d_dt"] = pd.to_datetime(df_daily_f["d"])
+    last_day = df_daily_f["d_dt"].max()
+    cutoff = last_day - pd.Timedelta(days=90)
+    df_daily_f = df_daily_f[df_daily_f["d_dt"] >= cutoff].copy()
+    df_daily_f["d"] = df_daily_f["d_dt"].dt.date
+    df_daily_f = df_daily_f.drop(columns=["d_dt"])
+
+
 
 # ---------- 5. KPIs ----------
 total_rev = df_raw_f["line_total"].sum()
