@@ -207,16 +207,29 @@ c2.metric("Avg Daily Revenue", f"${avg_rev:,.0f}" if avg_rev else "N/A")
 c3.metric("Peak Day", str(peak_day) if peak_day else "N/A")
 
 # ---------- 6. TREND CHART ----------
-# ---------- 6. TREND CHART ----------
-import plotly.express as px
-
 st.subheader("📈 Daily Revenue Trend")
 
 if not df_daily_f.empty:
+    # 7-day average
     df_daily_f["7d_avg"] = df_daily_f["revenue"].rolling(7).mean()
 
+    # ✅ Break long gaps so Plotly doesn't draw a diagonal line
+    df_plot = df_daily_f.copy()
+    df_plot["d"] = pd.to_datetime(df_plot["d"])
+
+    full_range = pd.date_range(df_plot["d"].min(), df_plot["d"].max(), freq="D")
+    df_plot = (
+        df_plot.set_index("d")
+               .reindex(full_range)
+               .rename_axis("d")
+               .reset_index()
+    )
+
+    # recompute 7d avg after inserting missing days
+    df_plot["7d_avg"] = df_plot["revenue"].rolling(7).mean()
+
     fig = px.line(
-        df_daily_f,
+        df_plot,
         x="d",
         y=["revenue", "7d_avg"],
         labels={"value": "Revenue", "variable": "Metric"},
