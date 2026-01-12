@@ -4,11 +4,18 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import plotly.express as px
 from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
 
-
+st.set_page_config(page_title="SmartRetail Insights", layout="wide")
 
 st.title("SmartRetail Insights — Daily Revenue (Kaggle)")
+st.caption(f"🟢 Live • Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "🧩 RFM Segments", "⚡ Live Feed"])
+
+
 
 # ---------- 1. PATHS ----------
 APP_DIR = Path(__file__).resolve().parent
@@ -198,13 +205,32 @@ c2.metric("Avg Daily Revenue", f"${avg_rev:,.0f}" if avg_rev else "N/A")
 c3.metric("Peak Day", str(peak_day) if peak_day else "N/A")
 
 # ---------- 6. TREND CHART ----------
+# ---------- 6. TREND CHART ----------
+import plotly.express as px
+
+st.subheader("📈 Daily Revenue Trend")
+
 if not df_daily_f.empty:
     df_daily_f["7d_avg"] = df_daily_f["revenue"].rolling(7).mean()
-    st.subheader("Daily Revenue Trend")
-    st.line_chart(df_daily_f.set_index("d")[["revenue", "7d_avg"]])
+
+    fig = px.line(
+        df_daily_f,
+        x="d",
+        y=["revenue", "7d_avg"],
+        labels={"value": "Revenue", "variable": "Metric"},
+        title="Revenue Trend (Daily vs 7-Day Average)",
+    )
+
+    fig.update_layout(
+        hovermode="x unified",
+        legend_title_text="",
+        template="plotly_white",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 else:
-    st.subheader("Daily Revenue Trend")
     st.info("No data for the selected filters.")
+
 
 # ---------- 7. TOP COUNTRIES ----------
 st.subheader("Top 5 Countries by Total Revenue")
