@@ -10,7 +10,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="SmartRetail Insights", layout="wide")
 
-st.title("SmartRetail Insights — Daily Revenue (Kaggle)")
+st.title("SmartRetail Insights — Daily Revenue")
 st.caption(f"🟢 Live • Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard", "🧩 RFM Segments", "⚡ Live Feed"])
@@ -191,13 +191,15 @@ if view_mode == "Recent (recommended)" and not df_daily_f.empty:
 
 
 # ---------- 5. KPIs ----------
-total_rev = df_raw_f["line_total"].sum()
-avg_rev = df_daily_f["revenue"].mean() if not df_daily_f.empty else 0
-if not df_daily_f.empty:
-    peak_row = df_daily_f.loc[df_daily_f["revenue"].idxmax()]
-    peak_day = peak_row["d"]
-else:
-    peak_day = None
+with tab1:
+
+    total_rev = df_raw_f["line_total"].sum()
+    avg_rev = df_daily_f["revenue"].mean() if not df_daily_f.empty else 0
+    if not df_daily_f.empty:
+        peak_row = df_daily_f.loc[df_daily_f["revenue"].idxmax()]
+        peak_day = peak_row["d"]
+    else:
+        peak_day = None
 
 c1, c2, c3 = st.columns(3)
 c1.metric("Total Revenue", f"${total_rev:,.0f}")
@@ -257,3 +259,44 @@ else:
     st.info("No data for the selected filters / country.")
 
 st.caption("Data: Online Retail II (Kaggle). Cleaned with pandas, visualized in Streamlit.")
+
+with tab2:
+    st.header("🧩 RFM Customer Segments")
+
+    rfm_path = PROJECT_ROOT / "data" / "processed" / "rfm_segments.parquet"
+
+    if rfm_path.exists():
+        rfm = pd.read_parquet(rfm_path).reset_index()
+
+        st.subheader("Customer distribution by segment")
+        seg = rfm["Segment"].value_counts().reset_index()
+        seg.columns = ["Segment", "Customers"]
+        st.bar_chart(seg.set_index("Segment"))
+
+        st.subheader("Top 20 customers by revenue")
+        st.dataframe(
+            rfm.sort_values("Monetary", ascending=False)[
+                ["CustomerID", "Recency", "Frequency", "Monetary", "Segment"]
+            ].head(20),
+            use_container_width=True
+        )
+    else:
+        st.warning("Run rfm_segmentation.py first")
+
+with tab3:
+    st.header("⚡ Live Transaction Feed")
+
+    if LIVE_PATH.exists():
+        live = pd.read_parquet(LIVE_PATH)
+        live["InvoiceDate"] = pd.to_datetime(live["InvoiceDate"], errors="coerce")
+        live = live.sort_values("InvoiceDate", ascending=False)
+
+        st.metric("Live transactions", f"{len(live):,}")
+        st.dataframe(
+            live[["Invoice", "InvoiceDate", "StockCode", "Quantity", "Price", "Country"]]
+            .head(20),
+            use_container_width=True
+        )
+    else:
+        st.info("No live data yet")
+
