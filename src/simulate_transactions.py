@@ -45,10 +45,17 @@ if len(df) < N_NEW:
 
 sample = df.sample(n=N_NEW, replace=True).copy()
 
-# Set InvoiceDate to "today" with random times
-today = pd.Timestamp.today().normalize()  # today's date 00:00
+# Set InvoiceDate across last 7 days with random times
+base_day = pd.Timestamp.today().normalize()
+day_offsets = np.random.randint(0, 7, size=N_NEW)  # 0..6 days back
 rand_minutes = np.random.randint(0, 24 * 60, size=N_NEW)
-sample["InvoiceDate"] = today + pd.to_timedelta(rand_minutes, unit="m")
+
+sample["InvoiceDate"] = (
+    base_day
+    - pd.to_timedelta(day_offsets, unit="D")
+    + pd.to_timedelta(rand_minutes, unit="m")
+)
+
 
 # Mark invoices as LIVE-XXXX
 sample["Invoice"] = [

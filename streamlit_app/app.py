@@ -37,29 +37,25 @@ df_daily_all = df_daily_all.rename(columns={"line_total": "revenue"})
 # Ensure d is a date
 df_daily_all["d"] = pd.to_datetime(df_daily_all["d"]).dt.date
 
-# Raw Excel for detailed filtering
-xls = pd.ExcelFile(RAW_EXCEL)
-df_raw = pd.concat(
-    [
-        pd.read_excel(xls, sheet_name=0),
-        pd.read_excel(xls, sheet_name=1),
-    ],
-    ignore_index=True,
-)
+TX_PATH = PROJECT_ROOT / "data" / "processed" / "transactions_clean.parquet"
 
-# ✅ Append simulated live transactions (today's data)
-if LIVE_PATH.exists():
-    df_live = pd.read_parquet(LIVE_PATH)
-    df_raw = pd.concat([df_raw, df_live], ignore_index=True)
+@st.cache_data(show_spinner=False)
+def load_daily(path):
+    df = pd.read_parquet(path).sort_values("d")
+    df = df.rename(columns={"line_total": "revenue"})
+    df["d"] = pd.to_datetime(df["d"]).dt.date
+    return df
 
+@st.cache_data(show_spinner=False)
+def load_tx(path):
+    df = pd.read_parquet(path)
+    df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"], errors="coerce")
+    df["InvoiceDate_date"] = df["InvoiceDate"].dt.date
+    return df
 
-# Basic clean on raw
-df_raw = df_raw.dropna(subset=["InvoiceDate", "Quantity", "Price", "Country"])
-df_raw = df_raw[(df_raw["Quantity"] > 0) & (df_raw["Price"] > 0)].copy()
-df_raw["InvoiceDate"] = pd.to_datetime(df_raw["InvoiceDate"], errors="coerce")
-df_raw = df_raw.dropna(subset=["InvoiceDate"])
-df_raw["InvoiceDate_date"] = df_raw["InvoiceDate"].dt.date
-df_raw["line_total"] = df_raw["Quantity"] * df_raw["Price"]
+df_daily_all = load_daily(DAILY_PATH)
+df_raw = load_tx(TX_PATH)
+
 
 # ---------- 3. SIDEBAR FILTERS ----------
 # ---------- SIDEBAR: REFRESH DATA ----------
@@ -189,89 +185,110 @@ if view_mode == "Recent (recommended)" and not df_daily_f.empty:
     df_daily_f = df_daily_f.drop(columns=["d_dt"])
 
 
-
 # ---------- 5. KPIs ----------
 with tab1:
 
     total_rev = df_raw_f["line_total"].sum()
     avg_rev = df_daily_f["revenue"].mean() if not df_daily_f.empty else 0
+
     if not df_daily_f.empty:
         peak_row = df_daily_f.loc[df_daily_f["revenue"].idxmax()]
         peak_day = peak_row["d"]
     else:
         peak_day = None
 
-c1, c2, c3 = st.columns(3)
-c1.metric("Total Revenue", f"${total_rev:,.0f}")
-c2.metric("Avg Daily Revenue", f"${avg_rev:,.0f}" if avg_rev else "N/A")
-c3.metric("Peak Day", str(peak_day) if peak_day else "N/A")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Revenue", f"${total_rev:,.0f}")
+    c2.metric("Avg Daily Revenue", f"${avg_rev:,.0f}" if avg_rev else "N/A")
+    c3.metric("Peak Day", str(peak_day) if peak_day else "N/A")
 
-# ---------- 6. TREND CHART ----------
-st.subheader("📈 Daily Revenue Trend")
 
-if not df_daily_f.empty:
-    # 7-day average
-    df_daily_f["7d_avg"] = df_daily_f["revenue"].rolling(7).mean()
+    # ---------- 6. TREND CHART ----------
+    st.subheader("📈 Daily Revenue Trend")
 
-    # ✅ Break long gaps so Plotly doesn't draw a diagonal line
-    df_plot = df_daily_f.copy()
-    df_plot["d"] = pd.to_datetime(df_plot["d"])
+    if not df_daily_f.empty:
+        df_daily_f["7d_avg"] = df_daily_f["revenue"].rolling(7).mean()
 
-    full_range = pd.date_range(df_plot["d"].min(), df_plot["d"].max(), freq="D")
-    df_plot = (
-        df_plot.set_index("d")
-               .reindex(full_range)
-               .rename_axis("d")
-               .reset_index()
-    )
+        df_plot = df_daily_f.copy()
+        df_plot["d"] = pd.to_datetime(df_plot["d"])
 
-    # recompute 7d avg after inserting missing days
-    df_plot["7d_avg"] = df_plot["revenue"].rolling(7).mean()
+        full_range = pd.date_range(df_plot["d"].min(), df_plot["d"].max(), freq="D")
+        df_plot = (
+            df_plot.set_index("d")
+                .reindex(full_range)
+                .rename_axis("d")
+                .reset_index()
+        )
 
-    fig = px.line(
-        df_plot,
+        df_plot["7d_avg"] = df_plot["revenue"].rolling(7).mean()
+
+        fig = px.line(
+            df_plot,
+            x="d",
+            y=["revenue", "7d_avg"],
+            title="Revenue Trend (Daily vs 7-Day Average)",
+            template="plotly_white"
+        )
+        fig.update_traces(mode="lines+markers")
+        fig.update_layout(hovermode="x unified")
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No data for the selected filters.")
+
+
+
+    # ---------- 7. TOP COUNTRIES ----------
+    st.subheader("Top 5 Countries by Total Revenue")
+
+    if not df_raw_f.empty:
+        if country_selected == "All":
+            top_countries = (
+                df_raw_f.groupby("Country")["line_total"]
+                      .sum()
+                      .sort_values(ascending=False)
+                      .head(5)
+                      .reset_index()
+            )
+        else:
+            top_countries = (
+                df_raw_f.groupby("Country")["line_total"]
+                      .sum()
+                      .reset_index()
+            )
+
+        st.bar_chart(top_countries.set_index("Country"))
+    else:
+        st.info("No data for the selected filters / country.")
+    
+
+        # ---------- LIVE ZOOM (LAST 7 DAYS) ----------
+    st.subheader("⚡ Live Zoom (Last 7 Days)")
+
+    df_live_zoom = df_daily_all.copy()
+    df_live_zoom["d"] = pd.to_datetime(df_live_zoom["d"])
+
+    last_day = df_live_zoom["d"].max()
+    df_live_zoom = df_live_zoom[
+        df_live_zoom["d"] >= (last_day - pd.Timedelta(days=7))
+    ].copy()
+
+    df_live_zoom["7d_avg"] = df_live_zoom["revenue"].rolling(7).mean()
+
+    fig2 = px.line(
+        df_live_zoom,
         x="d",
         y=["revenue", "7d_avg"],
-        labels={"value": "Revenue", "variable": "Metric"},
-        title="Revenue Trend (Daily vs 7-Day Average)",
+        title="Live Revenue (Last 7 Days)",
+        template="plotly_white"
     )
 
-    fig.update_layout(
-        hovermode="x unified",
-        legend_title_text="",
-        template="plotly_white",
-    )
+    fig2.update_traces(mode="lines+markers")
+    fig2.update_layout(hovermode="x unified")
 
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("No data for the selected filters.")
+    st.plotly_chart(fig2, use_container_width=True)
 
 
-# ---------- 7. TOP COUNTRIES ----------
-st.subheader("Top 5 Countries by Total Revenue")
-
-if not df_raw_f.empty:
-    # If All countries, show top 5; if single country, show just that one
-    if country_selected == "All":
-        top_countries = (
-            df_raw_f.groupby("Country")["line_total"]
-                    .sum()
-                    .sort_values(ascending=False)
-                    .head(5)
-                    .reset_index()
-        )
-    else:
-        top_countries = (
-            df_raw_f.groupby("Country")["line_total"]
-                    .sum()
-                    .reset_index()
-        )
-
-    st.bar_chart(top_countries.set_index("Country"))
-else:
-    st.info("No data for the selected filters / country.")
-
-st.caption("Data: Online Retail II (Kaggle). Cleaned with pandas, visualized in Streamlit.")
 
 with tab2:
     st.header("🧩 RFM Customer Segments")
