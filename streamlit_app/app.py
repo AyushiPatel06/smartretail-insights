@@ -204,37 +204,21 @@ with tab1:
 
 
     # ---------- 6. TREND CHART ----------
-    st.subheader("📈 Daily Revenue Trend")
+   # ---------- HISTORICAL TREND ----------
+    st.subheader("📊 Historical Revenue (2009–2011)")
 
-    if not df_daily_f.empty:
-        df_daily_f["7d_avg"] = df_daily_f["revenue"].rolling(7).mean()
+    df_hist = df_daily_all[df_daily_all["d"] < pd.to_datetime("2012-01-01").date()].copy()
+    df_hist["7d_avg"] = df_hist["revenue"].rolling(7).mean()
 
-        df_plot = df_daily_f.copy()
-        df_plot["d"] = pd.to_datetime(df_plot["d"])
-
-        full_range = pd.date_range(df_plot["d"].min(), df_plot["d"].max(), freq="D")
-        df_plot = (
-            df_plot.set_index("d")
-                .reindex(full_range)
-                .rename_axis("d")
-                .reset_index()
-        )
-
-        df_plot["7d_avg"] = df_plot["revenue"].rolling(7).mean()
-
-        fig = px.line(
-            df_plot,
-            x="d",
-            y=["revenue", "7d_avg"],
-            title="Revenue Trend (Daily vs 7-Day Average)",
-            template="plotly_white"
-        )
-        fig.update_traces(mode="lines+markers")
-        fig.update_layout(hovermode="x unified")
-
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No data for the selected filters.")
+    fig_hist = px.line(
+        df_hist,
+        x="d",
+        y=["revenue", "7d_avg"],
+        title="Historical Revenue Trend",
+        template="plotly_white"
+    )
+    fig_hist.update_layout(hovermode="x unified")
+    st.plotly_chart(fig_hist, use_container_width=True)
 
 
 
@@ -260,34 +244,32 @@ with tab1:
         st.bar_chart(top_countries.set_index("Country"))
     else:
         st.info("No data for the selected filters / country.")
-    
 
-        # ---------- LIVE ZOOM (LAST 7 DAYS) ----------
-    st.subheader("⚡ Live Zoom (Last 7 Days)")
+      
+# ---------- LIVE TREND ----------
+    st.subheader("⚡ Live Revenue (Last 14 Days)")
 
-    df_live_zoom = df_daily_all.copy()
-    df_live_zoom["d"] = pd.to_datetime(df_live_zoom["d"])
+    df_live = df_daily_all.copy()
+    df_live["d"] = pd.to_datetime(df_live["d"])
 
-    last_day = df_live_zoom["d"].max()
-    df_live_zoom = df_live_zoom[
-        df_live_zoom["d"] >= (last_day - pd.Timedelta(days=7))
-    ].copy()
+    last_day = df_live["d"].max()
+    df_live = df_live[df_live["d"] >= (last_day - pd.Timedelta(days=14))].copy()
 
-    df_live_zoom["7d_avg"] = df_live_zoom["revenue"].rolling(7).mean()
+    df_live["7d_avg"] = df_live["revenue"].rolling(7, min_periods=1).mean()
 
-    fig2 = px.line(
-        df_live_zoom,
+    fig_live = px.line(
+        df_live,
         x="d",
         y=["revenue", "7d_avg"],
-        title="Live Revenue (Last 7 Days)",
+        title="Live Revenue Trend (Auto-Updating)",
         template="plotly_white"
     )
+    fig_live.update_traces(mode="lines+markers")
+    fig_live.update_layout(hovermode="x unified")
+    st.plotly_chart(fig_live, use_container_width=True)
 
-    fig2.update_traces(mode="lines+markers")
-    fig2.update_layout(hovermode="x unified")
-
-    st.plotly_chart(fig2, use_container_width=True)
-
+    fig_live.update_traces(mode="lines+markers")
+    fig_live.update_yaxes(tickformat=",.0f")
 
 
 with tab2:
