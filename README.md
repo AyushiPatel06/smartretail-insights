@@ -1,4 +1,4 @@
-# 🛍️ SmartRetail Insights
+# SmartRetail Insights
 
 ### Real-Time Retail Analytics Dashboard (Python · Streamlit · Pandas · Parquet)
 
@@ -13,21 +13,21 @@ The project simulates a **real-world analytics workflow**:
 
 This project was designed to mirror how analytics systems are built and used in production environments.
 
-### ✅ Core Analytics Skills
+### Core Analytics Skills
 
 * Data cleaning and validation on transactional datasets
 * Time-series aggregation and revenue analysis
 * Customer analytics using **RFM (Recency, Frequency, Monetary)** modeling
 * KPI definition aligned to business metrics
 
-### ✅ Engineering & Workflow Skills
+### Engineering & Workflow Skills
 
 * Reproducible ETL pipelines using Python
 * Analytics-optimized storage using **Parquet**
 * Incremental data ingestion (simulated “live” transactions)
 * Auto-refresh dashboard pattern for monitoring use cases
 
-### ✅ Business Thinking
+### Business Thinking
 
 * Revenue trends and moving averages for decision-making
 * Customer segmentation to support retention and targeting strategies
@@ -37,7 +37,7 @@ This project was designed to mirror how analytics systems are built and used in 
 
 ## 📊 Key Features
 
-### 📌 Dashboard (Streamlit)
+### Dashboard (Streamlit)
 
 * **KPI cards**:
 
@@ -51,7 +51,7 @@ This project was designed to mirror how analytics systems are built and used in 
 
 ---
 
-### ⚡ Simulated Real-Time Analytics
+### Simulated Real-Time Analytics
 
 * Incremental “live transactions” are generated and appended to a Parquet store
 * Aggregated tables and KPIs update automatically
@@ -60,7 +60,7 @@ This project was designed to mirror how analytics systems are built and used in 
 
 ---
 
-### 🧩 Customer Analytics (RFM Segmentation)
+### Customer Analytics (RFM Segmentation)
 
 * Customer-level RFM scoring:
 
@@ -78,7 +78,7 @@ This project was designed to mirror how analytics systems are built and used in 
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```text
 smartretail-insights/
@@ -155,7 +155,7 @@ streamlit run streamlit_app/app.py
 
 ---
 
-## 📌 Notes
+## Notes
 
 * Raw data files are intentionally **not committed**
 * Parquet outputs are regenerated via scripts
