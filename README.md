@@ -50,9 +50,8 @@ smartretail-insights/
 ├── requirements.txt
 └── README.md
 
-## Screenshots
 
-## 📊 SmartRetail Insights Dashboard
+## 📸 Screenshots
 
 ### 🔹 Dashboard Overview
 ![Dashboard Overview](assets/dashboard_overview.png)
@@ -68,4 +67,5 @@ smartretail-insights/
 
 ### 🔹 Live Transaction Feed
 ![Live Transactions](assets/live_transaction_feed.png)
+
 
