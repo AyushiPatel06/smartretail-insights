@@ -52,13 +52,11 @@ smartretail-insights/
 
 ## Screenshots
 
-### 📊 Dashboard Overview
+## 📊 Dashboard Preview
+
 ![Dashboard](assets/dashboard.png)
-<img width="1209" height="637" alt="Screenshot 2026-01-19 at 8 45 20 PM" src="https://github.com/user-attachments/assets/8a5233de-3f65-4898-87f0-b80dd8be9418" />
 
+## ⚡ Live Transaction Feed
 
-### ⚡ Live Revenue & Auto Refresh
 ![Live Feed](assets/live_feed.png)
 
-### 🧩 Customer RFM Segmentation
-![RFM Segments](assets/rfm_segments.png)
