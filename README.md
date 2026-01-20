@@ -52,11 +52,20 @@ smartretail-insights/
 
 ## Screenshots
 
-## 📊 Dashboard Preview
+## 📊 SmartRetail Insights Dashboard
 
-![Dashboard](assets/dashboard.png)
+### 🔹 Dashboard Overview
+![Dashboard Overview](assets/dashboard_overview.png)
 
-## ⚡ Live Transaction Feed
+### 🔹 Historical Revenue (2009–2011)
+![Historical Revenue](assets/historical_revenue_2009_2011.png)
 
-![Live Feed](assets/live_feed.png)
+### 🔹 Live Revenue Trend (Last 7 Days)
+![Live Revenue](assets/live_revenue_last_7_days.png)
+
+### 🔹 RFM Customer Segments
+![RFM Segments](assets/rfm_customer_segments.png)
+
+### 🔹 Live Transaction Feed
+![Live Transactions](assets/live_transaction_feed.png)
 
